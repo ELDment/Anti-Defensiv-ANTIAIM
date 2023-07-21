@@ -22,6 +22,7 @@ public void OnPluginStart()
 {
 	HookEvent("round_freeze_end", Event_FreezeEnd, EventHookMode_PostNoCopy);
 	HookEvent("round_end", Event_RoundEnd, EventHookMode_PostNoCopy);
+	HookEvent("bullet_impact", Event_OnBulletImpact, EventHookMode_Post);
 }
 
 public void OnClientPostAdminCheck(int client)
@@ -48,6 +49,15 @@ public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 	}
 }
 
+public Action Event_OnBulletImpact(Event event, const char[] name, bool dontBroadcast) //解决因玩家高到离谱的shot fl引起的误判
+{
+	int client = GetClientOfUserId(event.GetInt("userid"));
+	if (!IsValidClient(client))
+		return Plugin_Continue;
+	CheckDelay(client);
+	return Plugin_Continue;
+}
+
 public Action OnPlayerRunCmd(int client, int& buttons, int& impulse, float vel[3], float angles[3], int& weapon, int& subtype, int& cmdnum, int& tickcount, int& seed, int mouse[2])
 {
 	if (RoundReset)
@@ -58,51 +68,43 @@ public Action OnPlayerRunCmd(int client, int& buttons, int& impulse, float vel[3
 		return Plugin_Continue;
 
 	float angRotation[3];
-	//GetEntPropVector(client, Prop_Send, "m_angRotation", angRotation);
 	GetClientEyeAngles(client, angRotation);
-	if (PYawvalue[client] == -114514.0)
+	if (PYawvalue[client] == -114514.0) //初始化
 	{
 		PYawvalue[client] = angRotation[0];
 		PTickcount[client] = GetSysTickCount();
 		return Plugin_Continue;
 	}
 	
-	if (buttons & IN_USE || buttons & IN_JUMP)
+	if (buttons & IN_USE) //防止因为开启Legit (E键) 造成的误判
+		return Plugin_Continue;
+		
+	/*
+	//空中不检测
+	if (buttons & IN_JUMP)
 		return Plugin_Continue;
 	if (!(GetEntityFlags(client) & FL_ONGROUND))
 		return Plugin_Continue;
 	if (GetEntityFlags(client) & FL_FLY)
 		return Plugin_Continue;
-	if (buttons & IN_ATTACK)
-	{
-		if (!(buttons & IN_ATTACK2) && !(buttons & IN_ATTACK3))
-			return Plugin_Continue;
-	}
+	*/
+	
 	if (PlayerIgnore[client])
 		return Plugin_Continue;
-		
 
 	if (GetSysTickCount() - PTickcount[client] >= 40)
 	{
 		float icount;
 		
-		if (PYawvalue[client] > angRotation[0])
-		{
-			icount = FloatAbs(PYawvalue[client] - angRotation[0]);
-		}
-		else if (PYawvalue[client] < angRotation[0])
+		icount = FloatAbs(PYawvalue[client] - angRotation[0]); //尽可能的优化性能
+		if (PYawvalue[client] < angRotation[0])
 		{
 			icount = FloatAbs(angRotation[0] - PYawvalue[client]);
 		}
-		else
-			icount = FloatAbs(PYawvalue[client] - angRotation[0]);
-		
-		//PrintHintText(client, "%.5f", angRotation[0]);
-		//PrintToChat(client, "> %.5f | %.5f", icount, angRotation[0]);
+
 		if (icount >= 89.999999)
 		{
 			PWarn[client]++;
-			//PrintToChat(client, "> %.5f", angRotation[0]);
 			PrintToChat(client, "\x01[\x0EAeT\x01] \x07请注意\x01，Pitch切换幅度(\x0E%.4f\x01)存疑 [#\x06%i\x01 次警告]", icount, PWarn[client]);
 			if (PWarn[client] >= 50)
 			{
@@ -116,6 +118,21 @@ public Action OnPlayerRunCmd(int client, int& buttons, int& impulse, float vel[3
 	}
 	
 	return Plugin_Continue;
+}
+
+public void OnEntityCreated(int entity, const char[] classname) //解决玩家反馈 - 丢道具误判
+{
+	if (entity < -1)
+		return;
+	if (entity > MaxClients && IsValidEdict(entity) && IsValidEntity(entity))
+	{
+		if (StrContains(classname, "_projectile", false) != -1)
+		{
+			int client = GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity");
+			if (IsValidClient(client))
+				CheckDelay(client);
+		}
+	}
 }
 
 public void CheckDelay(int client)
@@ -141,6 +158,9 @@ public Action ResetPlayerFlag(Handle Timer, int client)
 public bool IsValidClient(int client)
 {
 	if (client > 0 && client <= MaxClients)
-	{return (IsClientInGame(client) && !IsFakeClient(client) && IsClientConnected(client) && !IsClientSourceTV(client));}
-	else {return false;}
+	{
+		return (IsClientInGame(client) && !IsFakeClient(client) && IsClientConnected(client) && !IsClientSourceTV(client));
+	}else{
+		return false;
+	}
 }
