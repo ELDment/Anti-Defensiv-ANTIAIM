@@ -22,7 +22,7 @@ public void OnPluginStart()
 {
 	HookEvent("round_freeze_end", Event_FreezeEnd, EventHookMode_PostNoCopy);
 	HookEvent("round_end", Event_RoundEnd, EventHookMode_PostNoCopy);
-	HookEvent("bullet_impact", Event_OnBulletImpact, EventHookMode_Post);
+	HookEvent("weapon_fire", Event_WeaponFire, EventHookMode_Post);
 }
 
 public void OnClientPostAdminCheck(int client)
@@ -35,7 +35,7 @@ public void OnClientPostAdminCheck(int client)
 	PlayerIgnore[client] = false;
 }
 
-public void Event_FreezeEnd(Event event, const char[] name, bool dB)
+public void Event_FreezeEnd(Event event, const char[] name, bool dontBroadcast)
 {
 	RoundReset = false;
 }
@@ -49,7 +49,8 @@ public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 	}
 }
 
-public Action Event_OnBulletImpact(Event event, const char[] name, bool dontBroadcast) //解决因玩家高到离谱的shot fl引起的误判
+//更改事件bullet_impact -> weapon_fire 防止特殊武器开火不产生弹道（注: bullet_impact只有在子弹落点有碰撞物时才会触发）
+public Action Event_WeaponFire(Event event, const char[] name, bool dontBroadcast) //解决因玩家高到离谱的shot fl引起的误判
 {
 	int client = GetClientOfUserId(event.GetInt("userid"));
 	if (!IsValidClient(client))
